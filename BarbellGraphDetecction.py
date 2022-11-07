@@ -8,7 +8,9 @@ from sklearn.preprocessing import StandardScaler
 from dgl.nn.pytorch import GraphConv
 from torch import nn
 from torch.nn import functional as f
+from sklearn.metrics.cluster import normalized_mutual_info_score
 import matplotlib as plt
+from networkx.generators.community import LFR_benchmark_graph
 
 
 def __random__(g):
@@ -31,7 +33,20 @@ def __dijkstra__(g):
 
         data['feat'].append(np.asarray(dijkstra[node], dtype=np.float16))
 
-        data['label'].append(random.randint(0, 1))
+        label = []
+        communities = []
+        for v in g:
+            community = g.nodes[v]["community"]
+            if community not in communities:
+                communities.append(community)
+
+        top = (len(communities) - 1)
+        for n in g:
+            for c in range(0, top - 1):
+                if n in communities[c]:
+                    label.append(c)
+
+        data['label'].append(np.asarray(label, dtype=np.float16))
     return data
 
 
@@ -48,12 +63,19 @@ class BarbellGraph(DGLDataset):
     def __init__(self, train_val_test_split=None):
         self.train_val_test_split = train_val_test_split
         self.graph = None
+        self.num_classes = 0
         super().__init__(name='karateClub')
 
     def process(self):
-        nx_graph = nx.barbell_graph(10, 15)
-        nodes_data = __nodes_data__(nx_graph, 'random')
-        __dijkstra__(nx_graph)
+        n = 250
+        tau1 = 3
+        tau2 = 1.5
+        mu = 0.1
+        nx_graph = LFR_benchmark_graph(
+            n, tau1, tau2, mu, average_degree=5, min_community=20, seed=10
+        )
+        self.num_classes = {frozenset(nx_graph.nodes[v]["community"]) for v in nx_graph}
+        nodes_data = __nodes_data__(nx_graph, 'dijkstra')
         node_features = torch.from_numpy(np.asarray(nodes_data['feat']))
         node_labels = torch.from_numpy(np.asarray(nodes_data['label'])).type(torch.LongTensor)
 
@@ -142,14 +164,13 @@ def train(graph, model, epochs):
         if epoch % 10 == 0:
             print(f'In {epoch}, loss: {loss:.3f}, val acc: {best_val_acc:.3f}, test acc: {best_test_acc:.3f}')
 
-    return best_val_acc
+    return normalized_mutual_info_score(labels_true=labels, labels_pred=pred)
 
 
 dataset = BarbellGraph(train_val_test_split=[0.6, 0.2, 0.2])
 graph = dataset[0]
-model = GCN(in_feats=graph.ndata['feat'].shape[1], h_feats=100, num_classes=2)
+model = GCN(in_feats=graph.ndata['feat'].shape[1], h_feats=100, num_classes=len(dataset.num_classes))
 val_list = []
 for i in range(10):
-    val_list.append(train(graph, model, epochs=100))
-
-print(val_list)
+    nmi = train(graph, model, epochs=100)
+    print(nmi)
