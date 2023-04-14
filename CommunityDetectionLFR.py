@@ -41,8 +41,24 @@ G = nx.LFR_benchmark_graph(n, tau1, tau2, mu, average_degree=5, min_community=20
 dgl_G = dgl.from_networkx(G)
 
 
-shortest_paths = dict(nx.all_pairs_dijkstra_path(G, weight='weight'))
+
+
 features = torch.randn(n, n)
+print(features)
+shortest_paths = dict(nx.all_pairs_dijkstra_path(G, weight='weight'))
+distances = []
+for node, paths in shortest_paths.items():
+    list_path = list(paths.values())
+    node_path = []
+    for path in list_path:
+        node_path.append(len(path))
+    distances.append(node_path)
+features = torch.Tensor(distances)
+print(features.shape)
+
+
+
+
 
 # 4. Definir las etiquetas de los nodos, que representan la clase a la que pertenece cada nodo.
 labels = []
@@ -81,7 +97,7 @@ class GCN(nn.Module):
 model = GCN(n, int(n/2), num_communities)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 f = nn.CrossEntropyLoss()
-for epoch in range(50):
+for epoch in range(1000):
     logits = model(dgl_G, features)
     pred = logits.argmax(axis=1)
     train_logits = logits[train_mask]
