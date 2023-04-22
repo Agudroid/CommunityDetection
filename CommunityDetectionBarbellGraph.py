@@ -1,176 +1,61 @@
-import dgl
-import torch
-from dgl.data import DGLDataset
 import networkx as nx
-import random
+import torch
+import dgl
+import dgl.function as fn
+import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from dgl.nn.pytorch import GraphConv
-from torch import nn
-from torch.nn import functional as f
-from sklearn.metrics.cluster import normalized_mutual_info_score
-import matplotlib as plt
-from networkx.generators.community import LFR_benchmark_graph
+from sklearn.metrics import normalized_mutual_info_score
+
+# Generar grafo de barbell con comunidades
+G = nx.barbell_graph(5, 0)
+communities = np.zeros(G.number_of_nodes())
+communities[0:5] = 1
+communities[10:15] = 2
+
+distances = dict(nx.shortest_path_length(G))
+
+# Convertir a grafo DGL y agregar características
+dgl_G = dgl.from_networkx(G)
+
+ndata_distance = []
+for node in range(dgl_G.number_of_nodes()):
+    ndata_distance.append(torch.FloatTensor(list(distances[node].values())))
+dgl_G.ndata['distance'] = torch.stack(ndata_distance, dim=0)
+
+#dgl_G.ndata['feat'] = torch.rand((dgl_G.num_nodes(), 4))
+num_nodes = dgl_G.num_nodes()
 
 
-def __random__(g):
-    data = {'feat': [], 'label': []}
-
-    for i in range(g.number_of_nodes()):
-        data['feat'].append(random.randint(1, 10))
-        data['label'].append(random.randint(0, 1))
-
-    return data
+# Calcular la matriz de distancia
+distances = dict(nx.all_pairs_shortest_path_length(G))
 
 
-def __dijkstra__(g):
-    data = {'feat': [], 'label': []}
-
-    for node in range(g.number_of_nodes()):
-        dijkstra = []
-        for j in range(g.number_of_nodes()):
-            dijkstra.append(nx.dijkstra_path(g, node, j))
-
-        data['feat'].append(np.asarray(dijkstra[node], dtype=np.float16))
-
-        label = []
-        communities = []
-        for v in g:
-            community = g.nodes[v]["community"]
-            if community not in communities:
-                communities.append(community)
-
-        top = (len(communities) - 1)
-        for n in g:
-            for c in range(0, top - 1):
-                if n in communities[c]:
-                    label.append(c)
-
-        data['label'].append(np.asarray(label, dtype=np.float16))
-    return data
-
-
-def __nodes_data__(g, mode='random'):
-    if mode == 'random':
-        data = __random__(g)
-    else:
-        data = __dijkstra__(g)
-    return data
-
-
-class BarbellGraph(DGLDataset):
-
-    def __init__(self, train_val_test_split=None):
-        self.train_val_test_split = train_val_test_split
-        self.graph = None
-        self.num_classes = 0
-        super().__init__(name='karateClub')
-
-    def process(self):
-        n = 250
-        tau1 = 3
-        tau2 = 1.5
-        mu = 0.1
-        nx_graph = LFR_benchmark_graph(
-            n, tau1, tau2, mu, average_degree=5, min_community=20, seed=10
-        )
-        self.num_classes = {frozenset(nx_graph.nodes[v]["community"]) for v in nx_graph}
-        nodes_data = __nodes_data__(nx_graph, 'dijkstra')
-        node_features = torch.from_numpy(np.asarray(nodes_data['feat']))
-        node_labels = torch.from_numpy(np.asarray(nodes_data['label'])).type(torch.LongTensor)
-
-        n_nodes = len(nodes_data['feat'])
-        n_train = int(n_nodes * self.train_val_test_split[0])
-        n_val = int(n_nodes * self.train_val_test_split[1])
-
-        train_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        train_mask[:n_train] = True
-        val_mask[n_train: n_train + n_val] = True
-        test_mask[n_train + n_val:] = True
-
-        scaler = StandardScaler()
-        scaler.fit(node_features[train_mask].reshape(-1, 1))
-        node_features_standarized = scaler.transform(torch.reshape(node_features, (-1, 1)))
-        node_features_standarized = torch.from_numpy(
-            node_features_standarized).to(torch.float32)
-
-        self.graph = dgl.from_networkx(nx_graph)
-        self.graph.ndata['feat'] = node_features_standarized
-        self.graph.ndata['label'] = node_labels
-
-        self.graph.ndata['train_mask'] = train_mask
-        self.graph.ndata['val_mask'] = val_mask
-        self.graph.ndata['test_mask'] = test_mask
-
-    def __getitem__(self, i):
-        return self.graph
-
-    def __len__(self):
-        return 1
-
-
+# Definir modelo de detección de comunidades
 class GCN(nn.Module):
-    def __init__(self, in_feats, h_feats, num_classes):
+    def __init__(self, in_feats, out_feats):
         super(GCN, self).__init__()
+        self.conv1 = dgl.nn.GraphConv(in_feats, 16)
+        self.conv2 = dgl.nn.GraphConv(16, out_feats)
+        self.fc = nn.Linear(out_feats, 3)
+        self.conv1.reset_parameters()
+        
+    def forward(self, g, features):
+        x = F.relu(self.conv1(g, features))
+        x = self.conv2(g, x)
+        x = self.fc(x)
+        return x
 
-        self.conv1 = GraphConv(in_feats, h_feats)
-        self.conv2 = GraphConv(h_feats, h_feats)
-        self.conv3 = GraphConv(h_feats, num_classes)
+# Entrenar modelo
+model = GCN(len(ndata_distance), 16)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+criterion = nn.CrossEntropyLoss()
 
-    def forward(self, g, in_feat):
-        h = self.conv1(g, in_feat)
-        h = f.relu(h)
-        h = self.conv2(g, h)
-        h = f.relu(h)
-        h = self.conv3(g, h)
-        return h
-
-
-def train(graph, model, epochs):
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-    best_val_acc = 0
-    best_test_acc = 0
-
-    features = graph.ndata['feat']
-    labels = graph.ndata['label']
-    train_mask = graph.ndata['train_mask']
-    val_mask = graph.ndata['val_mask']
-    test_mask = graph.ndata['test_mask']
-
-    for epoch in range(1, epochs + 1):
-
-        logits = model(graph, features)
-        pred = logits.argmax(axis=1)
-
-        loss = f.cross_entropy(logits[train_mask], labels[train_mask])
-
-        train_acc = (pred[train_mask] == labels[train_mask]).float().mean()
-        val_acc = (pred[val_mask] == labels[val_mask]).float().mean()
-        test_acc = (pred[test_mask] == labels[test_mask]).float().mean()
-
-        if best_val_acc < val_acc:
-            best_val_acc = val_acc
-            best_test_acc = test_acc
-
-        optimizer.zero_grad()
-
-        loss.backward()
-
-        optimizer.step()
-
-        if epoch % 10 == 0:
-            print(f'In {epoch}, loss: {loss:.3f}, val acc: {best_val_acc:.3f}, test acc: {best_test_acc:.3f}')
-
-    return normalized_mutual_info_score(labels_true=labels, labels_pred=pred)
-
-
-dataset = BarbellGraph(train_val_test_split=[0.6, 0.2, 0.2])
-graph = dataset[0]
-model = GCN(in_feats=graph.ndata['feat'].shape[1], h_feats=100, num_classes=len(dataset.num_classes))
-val_list = []
-for i in range(10):
-    nmi = train(graph, model, epochs=100)
-    print(nmi)
+for epoch in range(100):
+    logits = model(dgl_G, dgl_G.ndata['distance'])
+    loss = criterion(logits, torch.LongTensor(communities))
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    nmi = normalized_mutual_info_score(communities, logits.argmax(1).detach().numpy())
+    print('Epoch {}, loss {:.4f}, NMI {:.4f}'.format(epoch, loss.item(), nmi))
