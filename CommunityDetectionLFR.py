@@ -8,16 +8,6 @@ from sklearn.metrics.cluster import normalized_mutual_info_score
 import matplotlib.pyplot as plt
 
 
-
-
-# 0. Lo manejamos como script
-parser = argparse.ArgumentParser(description='Selecciona el modo del script')
-parser.add_argument('-r', '--random', action='store_true', help='random')
-parser.add_argument('-d', '--dijkstra', action='store_true', help='Los datos de los nodos son un dijkstra')
-parser.add_argument('-p', '--dephpath', action='store_true', help='Los datos de los nodos son un recorrido en anchura')
-
-args = parser.parse_args()
-
 def evaluate(model, g, features, labels, mask):
     model.eval()
     with torch.no_grad():
@@ -72,10 +62,6 @@ def main():
     print(features.shape)
 
 
-
-
-
-    # 4. Definir las etiquetas de los nodos, que representan la clase a la que pertenece cada nodo.
     labels = []
     for node in G.nodes:
         node_community = G.nodes[node]['community']
