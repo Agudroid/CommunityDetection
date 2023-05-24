@@ -6,6 +6,8 @@ import torch.nn.functional as F
 import argparse
 from sklearn.metrics.cluster import normalized_mutual_info_score
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def evaluate(model, g, features, labels, mask):
@@ -40,16 +42,11 @@ def main():
     tau1 = 3
     tau2 = 1.5
     mu = 0.1
-    G = nx.LFR_benchmark_graph(n, tau1, tau2, mu, average_degree=5, min_community=20, seed=10)
+    G = nx.LFR_benchmark_graph(n, tau1, tau2, mu, average_degree=5, min_community=20, seed=0)
 
     # 2. Convertir el grafo de NetworkX a un grafo de DGL.
     dgl_G = dgl.from_networkx(G)
 
-
-
-
-    features = torch.randn(n, n)
-    print(features)
     shortest_paths = dict(nx.all_pairs_dijkstra_path(G, weight='weight'))
     distances = []
     for node, paths in shortest_paths.items():
@@ -59,6 +56,9 @@ def main():
             node_path.append(len(path))
         distances.append(node_path)
     features = torch.Tensor(distances)
+    
+
+    
     print(features.shape)
 
 
@@ -82,10 +82,10 @@ def main():
     test_mask[n_train+n_val:] = True
 
 
-    model = GCN(n, int(n/2), num_communities)
+    model = GCN(features.shape[1], features.shape[0], num_communities)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     f = nn.CrossEntropyLoss()
-    for epoch in range(100):
+    for epoch in range(300):
         logits = model(dgl_G, features)
         pred = logits.argmax(axis=1)
         train_logits = logits[train_mask]
@@ -108,7 +108,7 @@ experiments = []
 for i in range(10):
     nmi,g = main()
     experiments.append(nmi)
-    if(nmi > 0.65):
+    if(nmi < 0.65):
         nx.draw(g)
 plt.plot(experiments)
 plt.show()

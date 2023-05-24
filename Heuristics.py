@@ -1,5 +1,6 @@
 import dgl
 import networkx as nx
+from networkx.algorithms import community
 import numpy as np
 import torch
 import random
@@ -18,7 +19,7 @@ def __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, ev
             partition = []
             current_node = random.randint(0, graph.number_of_nodes()-1)
             while len(partition) < graph.number_of_nodes():
-                partition.append(current_node)
+                partition.append(current_node)  
 
                 probabilities = __calculate_probabilities__(graph, pheromones, partition, alpha, beta)
 
@@ -102,3 +103,15 @@ def ants_heuristic(graph):
     evaporation_rate = 10
     communities = __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate)
     return communities
+
+
+def louvain(graph):
+    nx_graph = graph.to_networkx()
+    partition = community.greedy_modularity_communities(nx_graph)
+    community_list = []
+    for node in range(graph.number_of_nodes()):
+        for i, comm in enumerate(partition):
+            if node in comm:
+                community_list.append(i)
+                break
+    return community_list

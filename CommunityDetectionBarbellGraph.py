@@ -4,10 +4,10 @@ import dgl
 import dgl.function as fn
 import torch.nn as nn
 import torch.nn.functional as F
-import random
 import numpy as np
-import Heuristics
+import Heuristics as h
 from sklearn.metrics import normalized_mutual_info_score
+from networkx.algorithms import community
 import warnings
 warnings.filterwarnings("ignore")
 torch.device("cpu")
@@ -16,21 +16,32 @@ torch.device("cpu")
 G = nx.barbell_graph(5, 1)
 
 
-distances = dict(nx.shortest_path_length(G))
 
 # Convertir a grafo DGL y agregar características
 dgl_G = dgl.from_networkx(G)
 
-communities = Heuristics.ants_heuristic(dgl_G)
+#communities = h.ants_heuristic(dgl_G)
+#communities = h.louvain(dgl_G)
+communities = h.ants_heuristic(dgl_G)
 communities = torch.LongTensor(communities)
+
+distances = dict(nx.shortest_path_length(G))
 
 ndata_distance = []
 for node in range(dgl_G.number_of_nodes()):
     ndata_distance.append(torch.FloatTensor(list(distances[node].values())))
+
 dgl_G.ndata['distance'] = torch.stack(ndata_distance, dim=0)
 
-dgl_G.ndata['feat'] = torch.rand((dgl_G.num_nodes(), 10))
-dgl_G.ndata['feat'] = torch.cat([dgl_G.ndata['feat'], dgl_G.ndata['distance']], dim=1)  # Concatenar distancias a las características existentes
+
+betweenness_centrality = nx.betweenness_centrality(G)
+betweenness_centrality_list = list(betweenness_centrality.values())
+betweenness_centrality_tensor = torch.tensor(betweenness_centrality_list).unsqueeze(1)
+dgl_G.ndata['centrality'] = betweenness_centrality_tensor
+
+dgl_G.ndata['feat'] = dgl_G.ndata['distance']
+dgl_G.ndata['feat'] = torch.cat(([dgl_G.ndata['feat'], dgl_G.ndata['centrality']]), dim=1) 
+
 
 num_nodes = dgl_G.num_nodes()
 
@@ -43,14 +54,14 @@ distances = dict(nx.all_pairs_shortest_path_length(G))
 class GCN(nn.Module):
     def __init__(self, in_feats, hidden_size, num_classes):
         super(GCN, self).__init__()
-        self.layers = torch.nn.ModuleList()
-        self.layers.append(torch.nn.Linear(in_feats, hidden_size))
-        self.layers.append(torch.nn.Linear(hidden_size, num_classes))
+        self.conv1 = dgl.nn.GraphConv(in_feats, hidden_size)
+        self.conv2 = dgl.nn.GraphConv(hidden_size, num_classes)
 
     def forward(self, g):
-        h = g.ndata['feat']
-        for layer in self.layers:
-            h = F.relu(layer(h))
+        in_feat = g.ndata['feat']
+        h = self.conv1(g, in_feat)
+        h = F.relu(h)
+        h = self.conv2(g, h)
         return h
 
 def test_net(graph):
@@ -71,7 +82,7 @@ model = GCN(dgl_G.ndata['feat'].shape[1],dgl_G.ndata['feat'].shape[0], len(commu
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 criterion = nn.CrossEntropyLoss()
 
-for epoch in range(200):
+for epoch in range(10000):
     logits = model(dgl_G)
     loss = criterion(logits, communities) 
     optimizer.zero_grad()
