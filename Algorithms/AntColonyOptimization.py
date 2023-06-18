@@ -1,10 +1,8 @@
-import dgl
 import networkx as nx
 from networkx.algorithms import community
 import numpy as np
 import torch
 import random
-
 
 def __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate):
     pheromones = torch.ones(graph.number_of_edges())
@@ -95,7 +93,7 @@ def __update_pheromones__(pheromones, partitions, modularity_scores, evaporation
 
     pheromones /= torch.sum(pheromones)
 
-def ants_heuristic(graph):
+def ants_algorithm(graph):
     num_ants = 10
     num_iterations = 10
     alpha = 1.0
