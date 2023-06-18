@@ -30,7 +30,7 @@ distances = dict(nx.shortest_path_length(G))
 ndata_distance = []
 for node in range(dgl_G.number_of_nodes()):
     ndata_distance.append(torch.FloatTensor(list(distances[node].values())))
-
+ 
 dgl_G.ndata['distance'] = torch.stack(ndata_distance, dim=0)
 
 
