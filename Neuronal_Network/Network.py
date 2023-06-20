@@ -8,7 +8,9 @@ import Algorithms.Dijkstra as dj
 import Graph_Construction as gc
 import Graph_Construction.BarbellGraph as barbell
 import Graph_Construction.LFRBenchmarkGraph as lfr
+import Analytics
 import logging
+
 
 class GCN(nn.Module):
     
@@ -16,7 +18,8 @@ class GCN(nn.Module):
         super(GCN, self).__init__()
         self.conv1 = dgl.nn.GraphConv(in_feats, hidden_size)
         self.conv2 = dgl.nn.GraphConv(hidden_size, hidden_size)
-        self.conv3 = dgl.nn.GraphConv(hidden_size, num_classes)
+        self.conv3 = dgl.nn.GraphConv(hidden_size, hidden_size)
+        self.conv4 = dgl.nn.GraphConv(hidden_size, num_classes)
 
     def forward(self, g, in_feat):
         h = self.conv1(g, in_feat)
@@ -24,6 +27,8 @@ class GCN(nn.Module):
         h = self.conv2(g, h)
         h = F.relu(h)
         h = self.conv3(g, h)
+        h = F.relu(h)
+        h = self.conv4(g, h)
         return h
     
 def train(graph, communities):
@@ -54,25 +59,30 @@ def train(graph, communities):
 
     model = GCN(features.shape[1], features.shape[0], num_communities)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    for epoch in range(50):
+    best_val_acc = 0
+    for epoch in range(1000):
         logits = model(dgl_G, features)
         pred = logits.argmax(axis=1)
         train_logits = logits[train_mask]
         train_labels = communities[train_mask]
         loss = F.cross_entropy(train_logits, train_labels)
 
+        # Compute accuracy on training/validation/test
+        train_acc = (pred[train_mask] == communities[train_mask]).float().mean()
+        val_acc = (pred[val_mask] == communities[val_mask]).float().mean()
+
+        # Save the best validation accuracy and the corresponding test accuracy.
+        if best_val_acc < val_acc:
+            best_val_acc = val_acc
+            
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         if epoch % 5 == 0:
-            print("Epoch {:2d}, Loss {:.4f}".format(epoch, loss.item()))
-
-def main():
-    logging.info("prueba")
-    graph = lfr.LFR_Graph()
-    communities = al.lovain_algorithm_optimized(graph)
-    logging.info("prueba 2")
-    train(graph=graph, communities=communities)
-
-main()
+            nmi = Analytics.nmi(labels=communities, pred=pred)
+            print(
+                "In epoch {}, loss: {:.3f}, val acc: {:.3f}, nmi: {:.3f} (best {:.3f})".format(
+                    epoch, loss, val_acc, best_val_acc, nmi
+                )
+            )

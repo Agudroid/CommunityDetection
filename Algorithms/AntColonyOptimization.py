@@ -1,5 +1,5 @@
 import networkx as nx
-from networkx.algorithms import community
+import dgl
 import numpy as np
 import torch
 import random
@@ -94,10 +94,14 @@ def __update_pheromones__(pheromones, partitions, modularity_scores, evaporation
     pheromones /= torch.sum(pheromones)
 
 def ants_algorithm(graph):
-    num_ants = 10
-    num_iterations = 10
+    num_ants = 2
+    num_iterations = 20
     alpha = 1.0
     beta = 1.0
     evaporation_rate = 10
     communities = __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate)
+    print(communities)
     return communities
+
+graph = nx.barbell_graph(2,2)
+ants_algorithm(dgl.from_networkx(graph) )

@@ -3,7 +3,8 @@ import logging
 import Graph_Construction.BarbellGraph as bg
 import Graph_Construction.LFRBenchmarkGraph as lfr
 import Algorithms.AntColonyOptimization as aco
-
+import Algorithms.Louvain as louvain
+import Neuronal_Network.Network as Network
 
 
 logging.basicConfig(format='[%(levelname)s]:%(message)s',level=logging.INFO)
@@ -43,6 +44,10 @@ elif(algorithm_selected == 'Louvain'):
     graph = lfr.LFR_Graph()
     logging.info("Barbell Graph created")    
 else:
-    logging.info("Using Ant Colony Optimization to find the communities..")
-    communities = aco.ants_algorithm(graph=graph)
-    logging.info("Communities found: " + communities)
+    logging.info("Using Louvain algorithm to find the communities..")
+    communities = louvain.lovain_algorithm_optimized(graph=graph)
+    logging.info("Communities found: " + str(communities))
+
+Network.train(graph=graph, communities=communities)
+    
+
