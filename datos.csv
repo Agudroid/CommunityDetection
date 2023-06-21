@@ -1,5 +1,11 @@
-,Column1,Column2,Column3,Column4
-Instancia,graph_barbell0.gml,,,
-modularidad,,0.5,,
-modularidad,,,0.5,
-modularidad,,,,0.4677734375
+,Instancia,Modularidad1,Modularidad2,Modularidad3
+0,graph_barbell0.gml,0.5302734375,0.5625,0.5
+1,graph_barbell1.gml,0.5,0.55859375,0.5
+2,graph_barbell2.gml,0.6552734375,0.5302734375,0.5
+3,graph_barbell3.gml,0.8427734375,0.5,0.560546875
+4,graph_barbell4.gml,0.5,0.6552734375,0.5
+5,graph_barbell5.gml,0.5,0.6552734375,0.5625
+6,graph_barbell6.gml,0.5,0.5302734375,0.5927734375
+7,graph_barbell7.gml,0.5,0.5,0.5625
+8,graph_barbell8.gml,0.5302734375,0.6552734375,0.4375
+9,graph_barbell9.gml,0.685546875,0.5,0.5
