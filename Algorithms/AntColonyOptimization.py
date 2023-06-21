@@ -33,7 +33,7 @@ def __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, ev
 
         __update_pheromones__(pheromones, partitions, modularity_scores, evaporation_rate, graph)
 
-    return best_partition
+    return best_partition,modularity
 
 
 def __calculate_probabilities__(graph, pheromones, partition, alpha, beta):
@@ -66,6 +66,7 @@ def __calculate_probabilities__(graph, pheromones, partition, alpha, beta):
 
 
 def __calculate_modularity__(graph, partitions):
+    
     num_edges = graph.number_of_edges()
     modularity = 0.0
 
@@ -95,13 +96,14 @@ def __update_pheromones__(pheromones, partitions, modularity_scores, evaporation
 
 def ants_algorithm(graph):
     num_ants = 2
-    num_iterations = 20
+    num_iterations = 40
     alpha = 1.0
     beta = 1.0
-    evaporation_rate = 10
-    communities = __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate)
+    evaporation_rate = 0.25
+    communities,modularity = __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate)
     print(communities)
-    return communities
+    print(modularity)
+    return communities,modularity
 
 graph = nx.barbell_graph(2,2)
 ants_algorithm(dgl.from_networkx(graph) )
