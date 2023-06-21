@@ -101,8 +101,6 @@ def ants_algorithm(graph):
     beta = 1.0
     evaporation_rate = 0.25
     communities,modularity = __ant_colony_optimization__(graph, num_ants, num_iterations, alpha, beta, evaporation_rate)
-    print(communities)
-    print(modularity)
     return communities,modularity
 
 graph = nx.barbell_graph(2,2)
