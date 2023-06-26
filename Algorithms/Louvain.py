@@ -50,3 +50,7 @@ def lovain_algorithm_optimized(graph):
                 community_list.append(i)
                 break
     return community_list
+
+def lovain_algorithm_optimized_experiment_format(graph):
+    partitions = community.greedy_modularity_communities(graph)
+    return partitions

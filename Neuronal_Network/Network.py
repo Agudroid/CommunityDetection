@@ -2,15 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl
-import networkx as nx
-import Algorithms.Louvain as al
 import Algorithms.Dijkstra as dj
-import Graph_Construction as gc
-import Graph_Construction.BarbellGraph as barbell
-import Graph_Construction.LFRBenchmarkGraph as lfr
 import Analytics
-import logging
-
 
 class GCN(nn.Module):
     
@@ -31,8 +24,8 @@ class GCN(nn.Module):
         h = self.conv4(g, h)
         return h
     
-def train(graph, communities):
-    
+def train(graph, communities, lr=0.01):
+    torch.device('cuda')
     dgl_G = dgl.from_networkx(graph)
     shortest_paths = dict(dj.dijkstra_optimized(graph))
     distances = []
@@ -58,7 +51,7 @@ def train(graph, communities):
     val_mask[n_train:n_train+n_val] = True
 
     model = GCN(features.shape[1], features.shape[0], num_communities)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     best_val_acc = 0
     for epoch in range(1000):
         logits = model(dgl_G, features)
@@ -78,11 +71,11 @@ def train(graph, communities):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-        if epoch % 5 == 0:
-            nmi = Analytics.nmi(labels=communities, pred=pred)
+        nmi = Analytics.nmi(labels=communities, pred=pred)
+        if epoch == 499:
             print(
                 "In epoch {}, loss: {:.3f}, val acc: {:.3f}, nmi: {:.3f} (best {:.3f})".format(
                     epoch, loss, val_acc, best_val_acc, nmi
                 )
             )
+    return nmi if nmi != 0 else 0.01
